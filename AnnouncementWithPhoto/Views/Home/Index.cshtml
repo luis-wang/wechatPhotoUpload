@@ -1,0 +1,102 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="~/Content/weui.min.css" rel="stylesheet" />
+    <style>
+        #imagecontainer img{
+            width:100%;
+        }
+    </style>
+    <script src="~/Scripts/jquery-1.10.2.min.js"></script>
+    <script src="~/Scripts/jweixin-1.1.0.js"></script>
+    <script>
+        var localIds;
+        function InitWechat() {
+            wx.config({
+                debug: false, // 开启调试模式,调用的所有api的返回值会在客户端alert出来，若要查看传入的参数，可以在pc端打开，参数信息会通过log打出，仅在pc端时才会打印。
+                appId: 'wx4939e0f62caad7dc', // 必填，企业号的唯一标识，此处填写企业号corpid
+                timestamp: '@ViewData["timestamp"]', // 必填，生成签名的时间戳
+                nonceStr: '@ViewData["nonceStr"]', // 必填，生成签名的随机串
+                signature: '@ViewData["signature"]',// 必填，签名，见附录1
+                jsApiList: ['chooseImage', 'uploadImage', 'previewImage'] // 必填，需要使用的JS接口列表，所有JS接口列表见附录2
+            });
+            wx.error(function (res) {
+                // config信息验证失败会执行error函数，如签名过期导致验证失败，具体错误信息可以打开config的debug模式查看，也可以在返回的res参数中查看，对于SPA可以在这里更新签名。
+                alert('config信息验证失败');
+            });
+
+        }
+        InitWechat();
+        function ChooseImage() {
+            wx.chooseImage({
+                count: 4, // 默认9
+                sizeType: ['compressed'], // 可以指定是原图还是压缩图，默认二者都有
+                sourceType: ['album', 'camera'], // 可以指定来源是相册还是相机，默认二者都有
+                success: function (res) {
+                    localIds = res.localIds; // 返回选定照片的本地ID列表，localId可以作为img标签的src属性显示图片
+                    if (localIds && localIds.length > 0) {
+                        var templateImg = "<img index=''indexVal onclick='PreviewImage(this)' src='srcVal'/>";
+                        localIds.forEach(function (value, index) {
+                            $("#imagecontainer").append($(templateImg.replace("srcVal", value).replace("indexVal", index)));
+                        });
+                    }
+                }
+            });
+        }
+        function PreviewImage(control) {
+            wx.previewImage({
+                current: $(control).attr("src"), // 当前显示图片的http链接
+                urls: localIds // 需要预览的图片http链接列表
+            });
+        }
+        function UploadImage() {
+            var serverIds = [];
+            if (!localIds || localIds.length < 1) {
+                alert('未选择任何图片');
+                return;
+            }
+            var successCount = 0;
+            localIds.forEach(function (value, index) {
+                wx.uploadImage({
+                    localId: value, // 需要上传的图片的本地ID，由chooseImage接口获得
+                    isShowProgressTips: 1,// 默认为1，显示进度提示
+                    success: function (res) {
+                        serverIds.push(res.serverId); // 返回图片的服务器端ID
+                        successCount++;
+                        if (successCount == localIds.length) {
+                            $.ajax({
+                                type: "POST",
+                                url: "/home/index",
+                                data: JSON.stringify({ "serverIds": serverIds }),
+                                contentType: "application/json; charset=utf-8",
+                                dataType: "json",
+                                success: function (msg) {
+                                    if (msg.success) {
+                                        //展示真正的图片
+                                        var templateImg = "<img index=''indexVal  src='srcVal'/>";
+                                        $("#imagecontainer").append($("<h1>下面是真正的图片，不信看图片url</h1>"));
+                                        msg.imgSrc.forEach(function (value, index) {
+                                            $("#imagecontainer").append($(templateImg.replace("srcVal", value).replace("indexVal", index)));
+                                        });
+                                        return;
+                                    }
+                                }
+
+                            });
+                        }
+                    }
+                });
+            });
+
+        }
+    </script>
+</head>
+<body>
+    <a href="javascript:void(0)" onclick="ChooseImage()" class="weui_btn weui_btn_primary">选择图片</a>
+    <a href="javascript:void(0)" onclick="UploadImage()" class="weui_btn weui_btn_primary">开始上传</a>
+    <div id="imagecontainer"></div>
+</body>
+</html>
